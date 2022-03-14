@@ -15,7 +15,7 @@
 #define MYUDP_PORT 5350
 #define BUFSIZE 60000
 #define DUSIZE 500
-#define NUMDU 3
+#define NUMDU 4
 
 struct ack_so {
     uint8_t num;
