@@ -28,9 +28,8 @@ double send_all(FILE *fp, int *data_size, int client_socket, struct sockaddr *de
     printf("The size of a packet is %d bytes.\n", DUSIZE);
 
     // Create a char array for storing the whole file.
-    long send_size = file_size + 1;
-    *data_size = send_size;
-    char *to_send = malloc(send_size);
+    *data_size = file_size;
+    char *to_send = malloc(file_size);
     if (to_send == NULL) {
         printf("Error creating buffer to store file contents! Exiting...\n");
         exit(1);
@@ -47,14 +46,14 @@ double send_all(FILE *fp, int *data_size, int client_socket, struct sockaddr *de
     // Start sending all data!
     printf("Starting data transfer...\n");
     long offset = 0;
-    while (offset <= send_size) {
+    while (offset <= file_size) {
         int test;
         // We send NUMDU units of data together, before waiting for acknowledgement.
         for (int i = 0; i < NUMDU; i++) {
             // Get the size of the data to be sent.
             int size;
-            if ((send_size + 1 - offset) < DUSIZE) {
-                size = send_size + 1 - offset;
+            if ((file_size + 1 - offset) < DUSIZE) {
+                size = file_size + 1 - offset;
             } else {
                 size = DUSIZE;
             }
@@ -68,12 +67,13 @@ double send_all(FILE *fp, int *data_size, int client_socket, struct sockaddr *de
             }
             free(du);
             offset += size;
+            printf("Sent DU %d\n", i+1);
         }
 
         // Wait to receive an acknowledgement.
         printf("Waiting for acknowledgement...");
         struct ack_so ack;
-        if ((test = recvfrom(client_socket, &ack, 2, 0, destination, (socklen_t *) &addr_len)) == -1) {
+        if ((test = recvfrom(client_socket, &ack, sizeof(struct ack_so), 0, destination, (socklen_t *) &addr_len)) == -1) {
             printf("Error receiving data! Exiting...\n");
             exit(1);
         } else if (ack.num != 1 || ack.len != 0) {
@@ -121,7 +121,7 @@ int main(int argc, char const *argv[]) {
     struct in_addr **addrs = (struct in_addr **) h->h_addr_list;
     int client_socket = socket(AF_INET, SOCK_DGRAM, 0);  // create the socket
     if (client_socket < 0) {
-        printf("\rError creating socket!\n");
+        printf("\rError creating client socket!\n");
         exit(1);
     }
     struct sockaddr_in ser_addr;

@@ -14,7 +14,6 @@
 
 #define MYUDP_PORT 5350
 #define BUFSIZE 60000
-#define MAXSIZE 50
 #define DUSIZE 500
 #define NUMDU 3
 
