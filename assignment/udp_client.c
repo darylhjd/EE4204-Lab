@@ -1,5 +1,6 @@
 #include "headsock.h"
 
+// Get the difference in timing in ms between an end and start time.
 double get_interval(struct timeval *end, struct timeval *start) {
     struct timeval diff;
     diff.tv_sec = end->tv_sec;
@@ -13,6 +14,7 @@ double get_interval(struct timeval *end, struct timeval *start) {
     return (diff.tv_sec) * 1000.0 + (diff.tv_usec) / 1000.0;
 }
 
+// Send all data in a file to the specified destination.
 double send_all(FILE *fp, int *data_size, int client_socket, struct sockaddr *destination, int addr_len) {
     // We read the whole file into memory.
     // Pointer gymnastics to get the size of the file.
@@ -88,6 +90,7 @@ double send_all(FILE *fp, int *data_size, int client_socket, struct sockaddr *de
     return get_interval(&end_time, &start_time);
 }
 
+// Program starts here.
 int main(int argc, char const *argv[]) {
     // Check correct number of arguments
     if (argc != 2) {
