@@ -13,7 +13,7 @@ double get_interval(struct timeval *end, struct timeval *start) {
     return (diff.tv_sec) * 1000.0 + (diff.tv_usec) / 1000.0;
 }
 
-void send_all(FILE *fp, int client_socket) {
+double send_all(FILE *fp, int *data_size, int client_socket, struct sockaddr *destination, int addr_len) {
     // We read the whole file into memory.
     // Pointer gymnastics to get the size of the file.
     long file_size;
@@ -27,6 +27,7 @@ void send_all(FILE *fp, int client_socket) {
 
     // Create a char array for storing the whole file.
     long send_size = file_size + 1;
+    *data_size = send_size;
     char *to_send = malloc(send_size);
     if (to_send == NULL) {
         printf("Error creating buffer to store file contents! Exiting...\n");
@@ -42,6 +43,7 @@ void send_all(FILE *fp, int client_socket) {
     gettimeofday(&start_time, NULL);
 
     // Start sending all data!
+    printf("Starting data transfer...\n");
     long offset = 0;
     while (offset <= send_size) {
         int test;
@@ -58,7 +60,7 @@ void send_all(FILE *fp, int client_socket) {
             char *du = malloc(size);
             memcpy(du, (to_send + offset), size);
             // Send the data
-            if ((test = send(client_socket, du, size, 0)) == -1) {
+            if ((test = sendto(client_socket, du, size, 0, destination, addr_len)) == 999) {
                 printf("There was an error sending a data unit! Exiting...\n");
                 exit(1);
             }
@@ -67,8 +69,9 @@ void send_all(FILE *fp, int client_socket) {
         }
 
         // Wait to receive an acknowledgement.
+        printf("Waiting for acknowledgement...");
         struct ack_so ack;
-        if ((test = recv(client_socket, &ack, 2, 0)) == -1) {
+        if ((test = recvfrom(client_socket, &ack, 2, 0, destination, (socklen_t *) &addr_len)) == -1) {
             printf("Error receiving data! Exiting...\n");
             exit(1);
         } else if (ack.num != 1 || ack.len != 0) {
@@ -78,6 +81,7 @@ void send_all(FILE *fp, int client_socket) {
         }
     }
     free(to_send);
+    printf("Done!\n");
 
     // Get the end timing.
     gettimeofday(&end_time, NULL);
@@ -92,28 +96,28 @@ int main(int argc, char const *argv[]) {
     }
 
     // Get hostname
-    struct hostent *host = gethostbyname(argv[1]);
-    if (host == NULL) {
+    struct hostent *h = gethostbyname(argv[1]);
+    if (h == NULL) {
         printf("Error getting hostname! Exiting...\n");
         exit(1);
     }
-    printf("Canonical name: %s\n", host->h_name);
+    printf("Canonical name: %s\n", h->h_name);
     // Print all aliases.
-    for (char **p = host->h_aliases; *p != NULL; p++) {
+    for (char **p = h->h_aliases; *p != NULL; p++) {
         printf("Alias: %s\n", *p);
     }
 
     // Print address type.
-    if (host->h_addrtype == AF_INET) {
+    if (h->h_addrtype == AF_INET) {
         printf("Using AF_INET...\n");
     } else {
         printf("Using unknown address type!\n");
     }
 
     // Set up the client socket.
-    struct in_addr **addrs = host->h_addr_list;
-    int client_socket = socket(AF_INET, SOCK_DGRAM, 0);  //create the socket
-    while (client_socket < 0) {
+    struct in_addr **addrs = (struct in_addr **) h->h_addr_list;
+    int client_socket = socket(AF_INET, SOCK_DGRAM, 0);  // create the socket
+    if (client_socket < 0) {
         printf("\rError creating socket!\n");
         exit(1);
     }
@@ -131,5 +135,13 @@ int main(int argc, char const *argv[]) {
     }
 
     // Send all the data.
-    send_all(fp, client_socket);
+    int data_size;
+    double duration = send_all(fp, &data_size, client_socket, (struct sockaddr *) &ser_addr, sizeof(struct sockaddr_in));
+    double data_rate = (data_size / duration);
+    printf("Time(ms): %.3f, Data sent (bytes): %d\nData rate: %.3f (Kbytes/s)\n", duration, data_size, data_rate);
+
+    // Close remaining stuff.
+    close(client_socket);
+    fclose(fp);
+    return 0;
 }
