@@ -15,7 +15,7 @@ double get_interval(struct timeval *end, struct timeval *start) {
 }
 
 // Send all data in a file to the specified destination.
-double send_all(FILE *fp, int *data_size, int client_socket, struct sockaddr *destination, int addr_len) {
+double send_all(FILE *fp, int *data_size, int num_du, int client_socket, struct sockaddr *destination, int addr_len) {
     // We read the whole file into memory.
     // Pointer gymnastics to get the size of the file.
     long file_size;
@@ -48,8 +48,8 @@ double send_all(FILE *fp, int *data_size, int client_socket, struct sockaddr *de
     long offset = 0;
     while (offset <= file_size) {
         int test;
-        // We send NUMDU units of data together, before waiting for acknowledgement.
-        for (int i = 0; i < NUMDU; i++) {
+        // We send num_du units of data together, before waiting for acknowledgement.
+        for (int i = 0; i < num_du; i++) {
             // Get the size of the data to be sent.
             int size;
             if ((file_size + 1 - offset) < DUSIZE) {
@@ -72,8 +72,8 @@ double send_all(FILE *fp, int *data_size, int client_socket, struct sockaddr *de
 
         // Wait to receive an acknowledgement.
         printf("Waiting for acknowledgement...");
-        struct ack_so ack;
-        if ((test = recvfrom(client_socket, &ack, sizeof(struct ack_so), 0, destination, (socklen_t *) &addr_len)) == -1) {
+        struct ACK ack;
+        if ((test = recvfrom(client_socket, &ack, sizeof(struct ACK), 0, destination, (socklen_t *) &addr_len)) == -1) {
             printf("Error receiving data! Exiting...\n");
             exit(1);
         } else if (ack.num != 1 || ack.len != 0) {
@@ -88,6 +88,38 @@ double send_all(FILE *fp, int *data_size, int client_socket, struct sockaddr *de
     // Get the end timing.
     gettimeofday(&end_time, NULL);
     return get_interval(&end_time, &start_time);
+}
+
+// Do all the sending.
+double do_send(int client_socket, struct sockaddr *destination) {
+    // Open the file and read the stuff to send.
+    FILE *fp;
+    if ((fp = fopen("myfile.txt", "r+t")) == NULL) {
+        printf("File doesn't exist!\n");
+        exit(1);
+    }
+
+    // Create output file.
+    FILE *out = fopen("results.csv", "w");
+    fputs("du_size,transfer_time,throughput\n", out);
+
+    // For each data unit size, we repeat a number of times.
+    for (int i = 0; i < sizeof(DU_SIZES) / sizeof(int); i++) {
+        int num_du = DU_SIZES[i];
+        for (int r = 0; r < REPEATS; r++) {
+            // Send all the data.
+            int data_size;
+            double duration = send_all(fp, &data_size, num_du, client_socket, destination, sizeof(struct sockaddr_in));
+            double data_rate = (data_size / duration);
+            printf("Time(ms): %.3f, Data sent (bytes): %d\nData rate: %.3f (Kbytes/s)\n", duration, data_size, data_rate);
+            fprintf(out, "%d,%.3f,%.3f\n", num_du, duration, data_rate);
+        }
+    }
+
+    // Close remaining stuff.
+    close(client_socket);
+    fclose(fp);
+    return 0;
 }
 
 // Program starts here.
@@ -130,21 +162,6 @@ int main(int argc, char const *argv[]) {
     memcpy(&(ser_addr.sin_addr.s_addr), *addrs, sizeof(struct in_addr));
     bzero(&(ser_addr.sin_zero), 8);
 
-
-    FILE *fp;
-    if ((fp = fopen("myfile.txt", "r+t")) == NULL) {
-        printf("File doesn't exist!\n");
-        exit(1);
-    }
-
-    // Send all the data.
-    int data_size;
-    double duration = send_all(fp, &data_size, client_socket, (struct sockaddr *) &ser_addr, sizeof(struct sockaddr_in));
-    double data_rate = (data_size / duration);
-    printf("Time(ms): %.3f, Data sent (bytes): %d\nData rate: %.3f (Kbytes/s)\n", duration, data_size, data_rate);
-
-    // Close remaining stuff.
-    close(client_socket);
-    fclose(fp);
-    return 0;
+    // Do the sending.
+    do_send(client_socket, (struct sockaddr *) &ser_addr);
 }

@@ -1,6 +1,6 @@
 #include "headsock.h"
 
-void receive_all(int server_socket, struct sockaddr *from, int addrlen) {
+void receive_all(int num_du, int server_socket, struct sockaddr *from, int addrlen) {
     // Create a char array to store received data.
     char received[BUFSIZE];
 
@@ -23,16 +23,16 @@ void receive_all(int server_socket, struct sockaddr *from, int addrlen) {
         group_size++;
         printf("Read %d bytes!\n", num_read);
         // If we received NUMDU number of data units, then we send one acknowledgement.
-        if (group_size == NUMDU || rec[num_read - 1] == '\0') {
+        if (group_size == num_du || rec[num_read - 1] == '\0') {
             printf("Sending ACK...");
-            struct ack_so ack;
+            struct ACK ack;
             ack.num = 1;
             ack.len = 0;
-            if (sendto(server_socket, &ack, sizeof(struct ack_so), 0, from, addrlen) == -1) {
+            if (sendto(server_socket, &ack, sizeof(struct ACK), 0, from, addrlen) == -1) {
                 printf("Error sending ACK!\n");
                 exit(1);
             }
-            group_size %= NUMDU;
+            group_size %= num_du;
             printf("Done!");
             if (rec[num_read - 1] == '\0') {
                 printf(" End of file detected, break!\n");
@@ -76,9 +76,12 @@ int main(int argc, char *argv[]) {
     }
 
     // Allow server to keep receiving.
-    while (1) {
-        printf("Waiting for data...\n");
-        receive_all(server_socket, (struct sockaddr *) &client_addr, sizeof(struct sockaddr_in));
+    for (int i = 0; i < sizeof(DU_SIZES) / sizeof(int); i++) {
+        int num_du = DU_SIZES[i];
+        for (int r = 0; r < REPEATS; r++) {
+            printf("Waiting for data...\n");
+            receive_all(num_du, server_socket, (struct sockaddr *) &client_addr, sizeof(struct sockaddr_in));
+        }
     }
 
     // Close.

@@ -13,11 +13,14 @@
 #include <unistd.h>
 
 #define MYUDP_PORT 5350
+
 #define BUFSIZE 60000
 #define DUSIZE 500
-#define NUMDU 4
 
-struct ack_so {
+#define REPEATS 100
+int DU_SIZES[] = {1, 2, 4};
+
+struct ACK {
     uint8_t num;
     uint8_t len;
 };
